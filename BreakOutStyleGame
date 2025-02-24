@@ -1,0 +1,208 @@
+import pygame
+import random
+
+# Initialize Pygame
+pygame.init()
+
+# Screen dimensions
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Brick Breaker")
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+ORANGE = (255, 165, 0)
+YELLOW = (255, 255, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+PURPLE = (128, 0, 128)
+
+# Paddle properties
+PADDLE_WIDTH = 100
+PADDLE_HEIGHT = 20
+paddle_x = WIDTH // 2 - PADDLE_WIDTH // 2
+paddle_y = HEIGHT - PADDLE_HEIGHT - 10
+paddle_speed = 10
+
+# Ball properties
+BALL_RADIUS = 10
+ball_x = WIDTH // 2
+ball_y = HEIGHT // 2
+ball_speed_x = 5 * random.choice([-1, 1])
+ball_speed_y = 5
+
+# Brick properties
+BRICK_WIDTH = 70
+BRICK_HEIGHT = 30
+BRICK_ROWS = 6
+BRICK_COLS = WIDTH // BRICK_WIDTH
+
+# Power-up properties
+POWERUP_WIDTH = 20
+POWERUP_HEIGHT = 20
+powerups = []
+
+# Game variables
+score = 0
+lives = 3
+level = 1
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 36)
+game_over = False
+win = False
+
+# Power-up flags
+expanded_paddle = False
+double_paddle = False
+triple_balls = False
+wrecking_ball = False
+pew_pew = False
+
+# Bullet properties
+bullets = []
+BULLET_WIDTH = 5
+BULLET_HEIGHT = 15
+BULLET_SPEED = 10
+
+def create_bricks():
+    bricks = []
+    colors = [RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE]
+    powerup_positions = random.sample(range(BRICK_ROWS * BRICK_COLS), 5)
+    for row in range(BRICK_ROWS):
+        for col in range(BRICK_COLS):
+            brick_x = col * BRICK_WIDTH
+            brick_y = row * BRICK_HEIGHT
+            brick_rect = pygame.Rect(brick_x, brick_y, BRICK_WIDTH, BRICK_HEIGHT)
+            brick_color = colors[row]
+            has_powerup = (row * BRICK_COLS + col) in powerup_positions
+            bricks.append((brick_rect, brick_color, has_powerup))
+    return bricks
+
+bricks = create_bricks()
+
+def draw_paddle(x, y, width):
+    pygame.draw.rect(screen, WHITE, (x, y, width, PADDLE_HEIGHT))
+
+def draw_ball(x, y):
+    pygame.draw.circle(screen, WHITE, (x, y), BALL_RADIUS)
+
+def draw_bricks(bricks):
+    for brick_rect, color, _ in bricks:
+        pygame.draw.rect(screen, color, brick_rect)
+
+def draw_powerups(powerups):
+    for powerup_rect, powerup_type in powerups:
+        pygame.draw.rect(screen, WHITE, powerup_rect)
+        text = font.render(powerup_type, True, BLACK)
+        text_rect = text.get_rect(center=powerup_rect.center)
+        screen.blit(text, text_rect)
+
+def draw_bullets(bullets):
+    for bullet_rect in bullets:
+        pygame.draw.rect(screen, WHITE, bullet_rect)
+
+def reset_ball():
+    global ball_x, ball_y, ball_speed_x, ball_speed_y
+    ball_x = WIDTH // 2
+    ball_y = HEIGHT // 2
+    ball_speed_x = 5 * random.choice([-1, 1])
+    ball_speed_y = 5
+
+def reset_powerups():
+    global expanded_paddle, double_paddle, triple_balls, wrecking_ball, pew_pew
+    expanded_paddle = False
+    double_paddle = False
+    triple_balls = False
+    wrecking_ball = False
+    pew_pew = False
+
+def handle_collisions():
+    global ball_x, ball_y, ball_speed_x, ball_speed_y, score, lives, bricks, powerups, paddle_x, PADDLE_WIDTH, bullets
+
+    # Ball and paddle collision
+    paddle_rect = pygame.Rect(paddle_x, paddle_y, PADDLE_WIDTH, PADDLE_HEIGHT)
+    ball_rect = pygame.Rect(ball_x - BALL_RADIUS, ball_y - BALL_RADIUS, BALL_RADIUS * 2, BALL_RADIUS * 2)
+
+    if ball_rect.colliderect(paddle_rect):
+        ball_speed_y *= -1
+        ball_speed_x += (ball_x - paddle_rect.centerx) / 10
+
+    # Ball and brick collision
+    bricks_to_remove = []
+    for brick_rect, color, has_powerup in bricks:
+        if ball_rect.colliderect(brick_rect):
+            score += 1000
+            bricks_to_remove.append((brick_rect, color, has_powerup))
+            if wrecking_ball:
+                wrecking_ball_hits = 0
+                wrecking_ball_hits += 1
+                if wrecking_ball_hits >= 3:
+                    ball_speed_y *= -1
+                    wrecking_ball = False
+                else:
+                    pass
+            else:
+                ball_speed_y *= -1
+
+            if has_powerup:
+                powerup_x = brick_rect.centerx - POWERUP_WIDTH // 2
+                powerup_y = brick_rect.centery - POWERUP_HEIGHT // 2
+                powerup_rect = pygame.Rect(powerup_x, powerup_y, POWERUP_WIDTH, POWERUP_HEIGHT)
+                powerup_type = random.choice(["E", "X2", "3X", "W", "Pew-Pew"])
+                powerups.append((powerup_rect, powerup_type))
+
+    for brick in bricks_to_remove:
+        bricks.remove(brick)
+
+    # Ball and screen collision
+    if ball_x <= BALL_RADIUS or ball_x >= WIDTH - BALL_RADIUS:
+        ball_speed_x *= -1
+    if ball_y <= BALL_RADIUS:
+        ball_speed_y *= -1
+    if ball_y >= HEIGHT - BALL_RADIUS:
+        lives -= 1
+        reset_ball()
+        reset_powerups()
+        if lives == 0:
+            global game_over
+            game_over = True
+        if double_paddle:
+          PADDLE_WIDTH = 100
+          double_paddle = False
+        if expanded_paddle:
+          PADDLE_WIDTH = 100
+          expanded_paddle = False
+
+    # Power-up and paddle collision
+    powerups_to_remove = []
+    for powerup_rect, powerup_type in powerups:
+        if powerup_rect.colliderect(paddle_rect):
+            powerups_to_remove.append((powerup_rect, powerup_type))
+            if powerup_type == "E":
+                PADDLE_WIDTH = 150
+                expanded_paddle = True
+            elif powerup_type == "X2":
+                double_paddle = True
+                PADDLE_WIDTH = 200
+            elif powerup_type == "3X":
+                triple_balls = True
+            elif powerup_type == "W":
+                wrecking_ball = True
+            elif powerup_type == "Pew-Pew":
+                pew_pew = True
+
+    for powerup in powerups_to_remove:
+        powerups.remove(powerup)
+
+    # Power-up and screen collision
+    powerups_to_remove = []
+    for powerup_rect, powerup_type in powerups:
+        if powerup_rect.y >= HEIGHT:
+            powerups_to_remove.append((powerup_rect, powerup_type))
+
+    for powerup in powerups_to_remove:
+        powerups.remove(powerup)
+
+    # Bullet and
